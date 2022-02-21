@@ -53,7 +53,7 @@ def convert2infection_matrix(flow_matrix):
 
 sample_inf_matrix = convert2infection_matrix(flow_matrix)
 
-infection_rates = pd.read_pickle('data/all_time_infection_rate_df.pickle')
+infection_rates = pd.read_pickle('../data/all_time_infection_rate_df.pickle')
 
 random_idx = rng.choice(infection_rates.index, 1)
 
