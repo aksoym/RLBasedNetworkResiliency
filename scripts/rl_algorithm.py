@@ -26,11 +26,11 @@ def generate_sparse_matrix(size, density, distribution):
     rng.shuffle(non_zero_entry_dist_normal_part)
     combined_non_zero_distribution = non_zero_entry_dist_uniform_part + non_zero_entry_dist_normal_part
 
-    combined_non_zero_distribution = non_zero_entry_distribution / sum(non_zero_entry_distribution)
-    non_zero_entry_distribution = sorted(list(non_zero_entry_distribution), reverse=True)
+    combined_non_zero_distribution = combined_non_zero_distribution / sum(combined_non_zero_distribution)
+    combined_non_zero_distribution = sorted(list(combined_non_zero_distribution), reverse=True)
 
     non_zero_indices = rng.choice(list(indices_except_diagonal), num_of_non_zero_entries,
-                                  p=non_zero_entry_distribution)
+                                  p=combined_non_zero_distribution)
 
     matrix = np.zeros(size*size)
     matrix[non_zero_indices] = sample_from_dist
