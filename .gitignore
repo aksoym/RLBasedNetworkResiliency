@@ -4,3 +4,4 @@ artifacts/
 **/load_model_from_ckpt.py
 *.pyc
 **/__pycache__/
+.vscode/
