@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 #flight_flows = pd.read_pickle("../data/all_time_flight_flow_df.pickle")
-rng = np.random.default_rng(seed=1130)
+#TODO embed rng function into single flow matrix func.
 
 def fetch_single_flow_matrix(flight_flow_df: pd.DataFrame, **kwargs) -> pd.DataFrame:
     #Either locate the matrix by an integer indexer or by date tw pair.
@@ -24,7 +24,7 @@ def fetch_single_flow_matrix(flight_flow_df: pd.DataFrame, **kwargs) -> pd.DataF
         return flight_flow_df.loc[(date, tw), :]
 
 
-def fetch_hourly_flow_matrices(arr_flow, dep_flow, random=True, **kwargs):
+def fetch_hourly_flow_matrices(arr_flow, dep_flow, rng, random=True, **kwargs):
     apt_count = len(arr_flow.columns)
     if random:
         #Minus three because we will increment the idx already.
