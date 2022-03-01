@@ -5,3 +5,4 @@ artifacts/
 *.pyc
 **/__pycache__/
 .vscode/
+**/wandb/

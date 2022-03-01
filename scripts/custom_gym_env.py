@@ -1,11 +1,12 @@
-from tabnanny import check
-from unittest import result
 import gym
 from gym import spaces
 import numpy as np
 import pandas as pd
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.ppo.ppo import PPO
+from wandb.integration.sb3 import WandbCallback
+import wandb
+from zmq import device
 
 from utils import fetch_single_flow_matrix, fetch_hourly_flow_matrices
 
@@ -148,14 +149,32 @@ class AirTrafficFlow(gym.Env):
         
         
         
-        return sum(eigenvalue_reward) + action_penalty, sum(eigenvalue_reward)
+        return sum(eigenvalue_reward) - action_penalty, sum(eigenvalue_reward)
         
     def close(self):
         pass
 
 env = AirTrafficFlow(n_apt=133)
 
-model = PPO("MultiInputPolicy", env, verbose=1).learn(total_timesteps=1000)
+timesteps = 1e2
+
+config = {
+    "timesteps": timesteps
+}
+
+run = wandb.init(
+    project="resiliencyRL",
+    config=config,
+    sync_tensorboard=True
+)
+
+model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=f"../artifacts/wandb_runs/{run.id}", device="cpu")
+model.learn(
+    total_timesteps=timesteps, 
+    callback=WandbCallback(model_save_path=f"../artifacts/models/{run.id}", verbose=2)
+)
+
+wandb.finish()
 
 
 
