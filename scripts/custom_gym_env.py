@@ -90,10 +90,10 @@ class AirTrafficFlow(gym.Env):
     
     def reset(self):
         #Get the hourly matrix list. [arr1, arr2, arr3, dep1, dep2, dep3]
-        self.hourly_matrix_list = fetch_hourly_flow_matrices(arr_flows, dep_flows, self.rng, random=True)
+        self.hourly_matrix_list = fetch_hourly_flow_matrices(arr_flows, dep_flows, self.n_apt, self.rng, random=True)
         
         #Initialize a random recovery rate vector.
-        self.recovery_rates = self.rng.normal(loc=1, scale=2, size=(133,))
+        self.recovery_rates = self.rng.normal(loc=1, scale=2, size=(self.n_apt,))
         
         self.stability_matrices = self._combine_hourly_flows_and_get_stability_matrices(self.hourly_matrix_list, 
                                                                                    self.recovery_rates)
@@ -154,9 +154,9 @@ class AirTrafficFlow(gym.Env):
     def close(self):
         pass
 
-env = AirTrafficFlow(n_apt=133)
+env = AirTrafficFlow(n_apt=30)
 
-timesteps = 1e4
+timesteps = 1e6
 
 config = {
     "timesteps": timesteps
@@ -168,12 +168,12 @@ run = wandb.init(
     sync_tensorboard=True
 )
 
-policy_kwargs = dict(activation_fn=nn.LeakyReLU, net_arch=[8, dict(vf=[8, 8], pi=[8])])
-model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=f"../artifacts/wandb_runs/{run.id}", device="cpu",
-            policy_kwargs=policy_kwargs)
+model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=f"../artifacts/wandb_runs/{run.id}", 
+            device="cpu", n_steps=256, n_epochs=10, batch_size=16)
 model.learn(
     total_timesteps=timesteps, 
-    callback=WandbCallback(model_save_path=f"../artifacts/models/{run.id}", verbose=2)
+    callback=WandbCallback(model_save_path=f"../artifacts/models/{run.id}", verbose=2),
+    n_eval_episodes=1
 )
 
 wandb.finish()
