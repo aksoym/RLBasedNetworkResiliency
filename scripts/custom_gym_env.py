@@ -6,7 +6,7 @@ from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.ppo.ppo import PPO
 from wandb.integration.sb3 import WandbCallback
 import wandb
-from zmq import device
+import torch.nn as nn
 
 from utils import fetch_single_flow_matrix, fetch_hourly_flow_matrices
 
@@ -156,7 +156,7 @@ class AirTrafficFlow(gym.Env):
 
 env = AirTrafficFlow(n_apt=133)
 
-timesteps = 1e2
+timesteps = 1e4
 
 config = {
     "timesteps": timesteps
@@ -168,7 +168,9 @@ run = wandb.init(
     sync_tensorboard=True
 )
 
-model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=f"../artifacts/wandb_runs/{run.id}", device="cpu")
+policy_kwargs = dict(activation_fn=nn.LeakyReLU, net_arch=[8, dict(vf=[8, 8], pi=[8])])
+model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=f"../artifacts/wandb_runs/{run.id}", device="cpu",
+            policy_kwargs=policy_kwargs)
 model.learn(
     total_timesteps=timesteps, 
     callback=WandbCallback(model_save_path=f"../artifacts/models/{run.id}", verbose=2)
