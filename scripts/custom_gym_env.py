@@ -76,7 +76,7 @@ class AirTrafficFlow(gym.Env):
                 self.hourly_matrix_list[3].iloc[row, column] -= 1
                 self.action_budget += 3
         else:
-            raise ValueError("Opeartion action must be one of the (0, 1, 2, 3)")
+            raise ValueError("Operation action must be one of the (0, 1, 2, 3)")
             
         resulting_observation = self._combine_hourly_flows_and_get_stability_matrices(self.hourly_matrix_list, 
                                                                                      self.recovery_rates)
@@ -148,14 +148,14 @@ class AirTrafficFlow(gym.Env):
             max_real_components_past_obs.append(max_real_eigenvalue_component)
             
         action_type_penalty = -(operation ** 2) / 100
-        action_budget_penalty = - (self.action_budget) ** 2 / 100
+        action_budget_penalty = -(self.action_budget ** 2) / 100
         eigenvalue_reward = [last_eigenvalue - new_eigenvalue 
                              for last_eigenvalue, new_eigenvalue 
                              in zip(max_real_components_past_obs, max_real_components)]
         
+        reward = sum(eigenvalue_reward) + action_type_penalty + action_budget_penalty
         
-        
-        return sum(eigenvalue_reward) + action_type_penalty + action_budget_penalty, sum(eigenvalue_reward)
+        return reward, sum(eigenvalue_reward)
         
     def close(self):
         pass
