@@ -148,7 +148,7 @@ class AirTrafficFlow(gym.Env):
             max_real_components_past_obs.append(max_real_eigenvalue_component)
             
         action_type_penalty = -(operation ** 2) / 100
-        action_budget_penalty = - self.action_budget) ** 2 / 100
+        action_budget_penalty = - (self.action_budget) ** 2 / 100
         eigenvalue_reward = [last_eigenvalue - new_eigenvalue 
                              for last_eigenvalue, new_eigenvalue 
                              in zip(max_real_components_past_obs, max_real_components)]
