@@ -60,18 +60,21 @@ class AirTrafficFlow(gym.Env):
             row, column = divmod(operation_index, self.n_apt)
             if self.hourly_matrix_list[3].iloc[row, column] >= 1:
                 self.hourly_matrix_list[3].iloc[row, column] -= 1
-            self.hourly_matrix_list[4].iloc[row, column] += 1
+                self.hourly_matrix_list[4].iloc[row, column] += 1
+                self.action_budget += 1
             
         elif operation == 2:
             row, column = divmod(operation_index, self.n_apt)
             if self.hourly_matrix_list[3].iloc[row, column] >= 1:
                 self.hourly_matrix_list[3].iloc[row, column] -= 1
-            self.hourly_matrix_list[5].iloc[row, column] += 1
+                self.hourly_matrix_list[5].iloc[row, column] += 1
+                self.action_budget += 2
             
         elif operation == 3:
             row, column = divmod(operation_index, self.n_apt)
             if self.hourly_matrix_list[3].iloc[row, column] >= 1:
                 self.hourly_matrix_list[3].iloc[row, column] -= 1
+                self.action_budget += 3
         else:
             raise ValueError("Opeartion action must be one of the (0, 1, 2, 3)")
             
@@ -81,6 +84,7 @@ class AirTrafficFlow(gym.Env):
         
         if stability_error < 0:
             done = True
+            self.action_budget = 0
         else:
             done = False
             
@@ -99,6 +103,7 @@ class AirTrafficFlow(gym.Env):
                                                                                    self.recovery_rates)
         #Cache the observation for later use.
         self.past_observation = self.stability_matrices
+        self.action_budget = 0
         
         return self.stability_matrices
         
@@ -142,19 +147,20 @@ class AirTrafficFlow(gym.Env):
             max_real_eigenvalue_component = max(eigenvalues.real)
             max_real_components_past_obs.append(max_real_eigenvalue_component)
             
-        action_penalty = (operation ** 2) / 10
+        action_type_penalty = -(operation ** 2) / 100
+        action_budget_penalty = - self.action_budget) ** 2 / 100
         eigenvalue_reward = [last_eigenvalue - new_eigenvalue 
                              for last_eigenvalue, new_eigenvalue 
                              in zip(max_real_components_past_obs, max_real_components)]
         
         
         
-        return sum(eigenvalue_reward) - action_penalty, sum(eigenvalue_reward)
+        return sum(eigenvalue_reward) + action_type_penalty + action_budget_penalty, sum(eigenvalue_reward)
         
     def close(self):
         pass
 
-env = AirTrafficFlow(n_apt=30)
+env = AirTrafficFlow(n_apt=40)
 
 timesteps = 1e6
 
@@ -168,12 +174,10 @@ run = wandb.init(
     sync_tensorboard=True
 )
 
-model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=f"../artifacts/wandb_runs/{run.id}", 
-            device="cpu", n_steps=256, n_epochs=10, batch_size=16)
+model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=f"../artifacts/wandb_runs/{run.id}")
 model.learn(
     total_timesteps=timesteps, 
-    callback=WandbCallback(model_save_path=f"../artifacts/models/{run.id}", verbose=2),
-    n_eval_episodes=1
+    callback=WandbCallback(model_save_path=f"../artifacts/models/{run.id}", verbose=2)
 )
 
 wandb.finish()
