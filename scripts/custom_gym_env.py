@@ -19,7 +19,7 @@ dep_flows = pd.read_pickle("../data/hourly_departure_matrix_updated.pickle")
 class AirTrafficFlow(gym.Env):
     
     
-    NUM_OF_OPERATIONS = 4 #0-> do nothing, 1-> delay 1hr, 2-> delay 2h, 3-> cancel flight.
+    NUM_OF_OPERATIONS = 3 #1-> delay 1hr, 2-> delay 2h, 3-> cancel flight.
     
     def __init__(self, n_apt: int, seed: int = 0) -> None:
         super().__init__()
@@ -31,6 +31,8 @@ class AirTrafficFlow(gym.Env):
             
         self.n_apt = n_apt
         self.action_space = spaces.MultiDiscrete([n_apt*(n_apt - 1), self.NUM_OF_OPERATIONS])
+        self.operable_traffic_ratio = 0.1
+        self.stability_threshold = 0
         
         self.observation_space = spaces.Dict({
             
@@ -52,39 +54,47 @@ class AirTrafficFlow(gym.Env):
         operable_entries = [entry for entry in all_entries if entry not in diagonal_entries]
         
         operation_index = operable_entries[entry_index]
-        
+        self.actual_operation = 0
         #Operation index.
+        
         if operation == 0:
-            pass
-        elif operation == 1:
             row, column = divmod(operation_index, self.n_apt)
             if self.hourly_matrix_list[3].iloc[row, column] >= 1:
                 self.hourly_matrix_list[3].iloc[row, column] -= 1
                 self.hourly_matrix_list[4].iloc[row, column] += 1
                 self.action_budget += 1
+                self.actual_operation = 1
+                self.action_counter += 1
+                
             
-        elif operation == 2:
+        elif operation == 1:
             row, column = divmod(operation_index, self.n_apt)
             if self.hourly_matrix_list[3].iloc[row, column] >= 1:
                 self.hourly_matrix_list[3].iloc[row, column] -= 1
                 self.hourly_matrix_list[5].iloc[row, column] += 1
                 self.action_budget += 2
+                self.actual_operation = 2
+                self.action_counter += 1
+                
             
-        elif operation == 3:
+        elif operation == 2:
             row, column = divmod(operation_index, self.n_apt)
             if self.hourly_matrix_list[3].iloc[row, column] >= 1:
                 self.hourly_matrix_list[3].iloc[row, column] -= 1
                 self.action_budget += 3
+                self.actual_operation = 3
+                self.action_counter += 1
+                
         else:
-            raise ValueError("Operation action must be one of the (0, 1, 2, 3)")
+            raise ValueError("Operation action must be one of the (1, 2, 3)")
             
         resulting_observation = self._combine_hourly_flows_and_get_stability_matrices(self.hourly_matrix_list, 
                                                                                      self.recovery_rates)
-        reward_from_observation, stability_error = self._reward(operation, resulting_observation, self.past_observation)
+        reward_from_observation, stability_metric = self._reward(resulting_observation, self.past_observation)
         
-        if stability_error < 0:
+        
+        if (self.action_counter == self.n_max_actions) or (stability_metric < self.stability_threshold):
             done = True
-            self.action_budget = 0
         else:
             done = False
             
@@ -104,6 +114,10 @@ class AirTrafficFlow(gym.Env):
         #Cache the observation for later use.
         self.past_observation = self.stability_matrices
         self.action_budget = 0
+        self.actual_operation = 0
+        self.n_max_actions = np.rint(np.sum(self.hourly_matrix_list[3].values) * self.operable_traffic_ratio)
+        self.action_counter = 0
+        
         
         return self.stability_matrices
         
@@ -132,7 +146,7 @@ class AirTrafficFlow(gym.Env):
                 "second_hour": stability_matrices[1].flatten(), 
                 "third_hour": stability_matrices[2].flatten()}
         
-    def _reward(self, operation, observation, past_observation):
+    def _reward(self, observation, past_observation):
         max_real_components = []
         for matrix in observation.values():
             matrix = matrix.reshape(self.n_apt, self.n_apt)
@@ -147,20 +161,26 @@ class AirTrafficFlow(gym.Env):
             max_real_eigenvalue_component = max(eigenvalues.real)
             max_real_components_past_obs.append(max_real_eigenvalue_component)
             
-        action_type_penalty = -(operation ** 2) / 100
-        action_budget_penalty = -(self.action_budget ** 2) / 100
-        eigenvalue_reward = [last_eigenvalue - new_eigenvalue 
+        action_type_penalty = -(self.actual_operation ** 2) / 1000
+        action_budget_penalty = -(self.action_budget ** 2) / 1000
+        eigenvalue_diff = [last_eigenvalue - new_eigenvalue 
                              for last_eigenvalue, new_eigenvalue 
                              in zip(max_real_components_past_obs, max_real_components)]
         
-        reward = sum(eigenvalue_reward) + action_type_penalty + action_budget_penalty
+        if sum(eigenvalue_diff) > 0: 
+            eigenvalue_reward = sum(eigenvalue_diff) * 100000
+        else: 
+            eigenvalue_reward = sum(eigenvalue_diff)
+        reward = eigenvalue_reward + action_type_penalty + action_budget_penalty
         
-        return reward, sum(eigenvalue_reward)
+        return reward, sum(eigenvalue_diff)
         
     def close(self):
         pass
 
-env = AirTrafficFlow(n_apt=40)
+
+SEED = 1027
+env = AirTrafficFlow(n_apt=50, seed=SEED)
 
 timesteps = 1e6
 
@@ -168,16 +188,17 @@ config = {
     "timesteps": timesteps
 }
 
-run = wandb.init(
-    project="resiliencyRL",
-    config=config,
-    sync_tensorboard=True
-)
+run = wandb.init(project="resiliencyRL", config=config ,sync_tensorboard=True, mode="disabled")
+tb_log = f"../artifacts/wandb_runs/{run.id}"
+wandb_callback = WandbCallback(model_save_path=f"../artifacts/models/{run.id}", verbose=2)
 
-model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=f"../artifacts/wandb_runs/{run.id}")
+tb_log = "../artifacts/tensorboard_logs/"
+policy_kwargs = dict(net_arch=[1024, 512, dict(vf=[512, 256, 128], pi=[256, 256, 128])])
+
+model = PPO("MultiInputPolicy", env, verbose=1, tensorboard_log=tb_log, gamma=0.9, seed=SEED)
 model.learn(
     total_timesteps=timesteps, 
-    callback=WandbCallback(model_save_path=f"../artifacts/models/{run.id}", verbose=2)
+    callback=wandb_callback
 )
 
 wandb.finish()
